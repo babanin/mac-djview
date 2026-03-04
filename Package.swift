@@ -11,6 +11,9 @@ let package = Package(
             resources: [
                 .process("Assets.xcassets"),
                 .copy("PrivacyInfo.xcprivacy")
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-dead_strip"])
             ]
         )
     ]

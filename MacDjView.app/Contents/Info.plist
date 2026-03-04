@@ -1,21 +1,3 @@
-#!/bin/bash
-set -e
-
-cd "$(dirname "$0")/.."
-
-echo "Building MacDjView..."
-swift build -c release
-
-APP_DIR="MacDjView.app/Contents"
-mkdir -p "$APP_DIR/MacOS"
-mkdir -p "$APP_DIR/Resources"
-
-# Copy binary and strip debug symbols (saves ~50% of binary size)
-cp .build/release/MacDjView "$APP_DIR/MacOS/"
-strip "$APP_DIR/MacOS/MacDjView"
-
-# Write Info.plist
-cat > "$APP_DIR/Info.plist" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -62,7 +44,3 @@ cat > "$APP_DIR/Info.plist" << 'PLIST'
     </array>
 </dict>
 </plist>
-PLIST
-
-echo "Created MacDjView.app"
-echo "Run with: open MacDjView.app"

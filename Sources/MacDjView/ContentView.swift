@@ -11,6 +11,13 @@ enum ScrollMode: String {
     case continuous = "Continuous"
 }
 
+private struct DocumentState: Codable {
+    var currentPage: Int
+    var zoom: Double
+    var pageLayout: String
+    var scrollMode: String
+}
+
 struct ContentView: View {
     @State private var document: DjVuDocument?
     @State private var currentPage = 0
@@ -25,6 +32,7 @@ struct ContentView: View {
     @State private var pageCache = PageCache()
     @State private var scrollTarget: Int?
     @State private var viewportSize: CGSize = .zero
+    @State private var documentURL: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,7 +72,8 @@ struct ContentView: View {
                         .frame(width: 0, height: 0)
                         .opacity(0)
 
-                    Spacer()
+                    Divider()
+                        .frame(height: 20)
 
                     HStack(spacing: 2) {
                         Button {
@@ -113,7 +122,8 @@ struct ContentView: View {
                         .help("Continuous Scroll")
                     }
 
-                    Spacer()
+                    Divider()
+                        .frame(height: 20)
 
                     Button("−") { adjustZoom(-0.25) }
                         .keyboardShortcut("-", modifiers: .command)
@@ -236,6 +246,7 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         .onChange(of: pageLayout) { _, newLayout in
             guard document != nil else { return }
+            saveDocumentState()
             if newLayout == .twoPage {
                 currentPage = spreadStartPage(for: currentPage)
             }
@@ -247,11 +258,18 @@ struct ContentView: View {
         }
         .onChange(of: scrollMode) { _, newMode in
             guard document != nil else { return }
+            saveDocumentState()
             if newMode == .paged {
                 renderCurrentPage()
             } else {
                 scrollTarget = currentPage
             }
+        }
+        .onChange(of: currentPage) { _, _ in
+            saveDocumentState()
+        }
+        .onChange(of: zoom) { _, _ in
+            saveDocumentState()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openDjVuFile)) { notification in
             if let url = notification.object as? URL {
@@ -279,6 +297,7 @@ struct ContentView: View {
         errorMessage = nil
         pageImage = nil
         fileName = url.lastPathComponent
+        documentURL = url
         pageCache.removeAll()
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -287,11 +306,23 @@ struct ContentView: View {
                 let doc = try DjVuDocument(data: data)
                 DispatchQueue.main.async {
                     self.document = doc
-                    self.currentPage = 0
-                    self.zoom = 1.0
+                    if let saved = restoreDocumentState() {
+                        self.currentPage = min(max(saved.currentPage, 0), doc.pageCount - 1)
+                        self.zoom = saved.zoom
+                        if let layout = PageLayout(rawValue: saved.pageLayout) {
+                            self.pageLayout = layout
+                        }
+                        if let mode = ScrollMode(rawValue: saved.scrollMode) {
+                            self.scrollMode = mode
+                        }
+                    } else {
+                        self.currentPage = 0
+                        self.zoom = 1.0
+                    }
                     if self.scrollMode == .paged {
                         renderCurrentPage()
                     } else {
+                        self.scrollTarget = self.currentPage
                         self.isLoading = false
                     }
                 }
@@ -356,6 +387,25 @@ struct ContentView: View {
             renderCurrentPage()
         }
         // Continuous mode re-renders automatically via .task(id:) in ContinuousPageSlot
+    }
+
+    private func saveDocumentState() {
+        guard document != nil, let documentURL else { return }
+        let state = DocumentState(
+            currentPage: currentPage,
+            zoom: zoom,
+            pageLayout: pageLayout.rawValue,
+            scrollMode: scrollMode.rawValue
+        )
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        UserDefaults.standard.set(data, forKey: "docState:\(documentURL.path)")
+    }
+
+    private func restoreDocumentState() -> DocumentState? {
+        guard let documentURL,
+              let data = UserDefaults.standard.data(forKey: "docState:\(documentURL.path)")
+        else { return nil }
+        return try? JSONDecoder().decode(DocumentState.self, from: data)
     }
 
     private func renderCurrentPage() {
