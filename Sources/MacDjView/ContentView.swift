@@ -1,8 +1,13 @@
 import SwiftUI
 import AppKit
 
-enum ViewMode: String, CaseIterable {
-    case singlePage = "Single Page"
+enum PageLayout: String {
+    case single = "Single Page"
+    case twoPage = "Two Pages"
+}
+
+enum ScrollMode: String {
+    case paged = "Paged"
     case continuous = "Continuous"
 }
 
@@ -10,11 +15,13 @@ struct ContentView: View {
     @State private var document: DjVuDocument?
     @State private var currentPage = 0
     @State private var pageImage: NSImage?
+    @State private var rightPageImage: NSImage?
     @State private var zoom: Double = 1.0
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var fileName: String?
-    @State private var viewMode: ViewMode = .singlePage
+    @State private var pageLayout: PageLayout = .single
+    @State private var scrollMode: ScrollMode = .paged
     @State private var pageCache = PageCache()
     @State private var scrollTarget: Int?
     @State private var viewportSize: CGSize = .zero
@@ -32,8 +39,15 @@ struct ContentView: View {
                         .disabled(currentPage <= 0)
                         .keyboardShortcut(.leftArrow, modifiers: [])
 
-                    Text("Page \(currentPage + 1) of \(document.pageCount)")
-                        .monospacedDigit()
+                    Group {
+                        if pageLayout == .twoPage, currentPage > 0,
+                           currentPage + 1 < document.pageCount {
+                            Text("Pages \(currentPage + 1)–\(currentPage + 2) of \(document.pageCount)")
+                        } else {
+                            Text("Page \(currentPage + 1) of \(document.pageCount)")
+                        }
+                    }
+                    .monospacedDigit()
 
                     Button("▶") { navigatePage(1) }
                         .disabled(currentPage >= document.pageCount - 1)
@@ -54,23 +68,48 @@ struct ContentView: View {
 
                     HStack(spacing: 2) {
                         Button {
-                            viewMode = .singlePage
+                            pageLayout = .single
                         } label: {
                             Image(systemName: "doc")
                                 .frame(width: 28, height: 22)
                         }
                         .buttonStyle(.bordered)
-                        .tint(viewMode == .singlePage ? .accentColor : nil)
+                        .tint(pageLayout == .single ? .accentColor : nil)
                         .help("Single Page")
 
                         Button {
-                            viewMode = .continuous
+                            pageLayout = .twoPage
                         } label: {
-                            Image(systemName: "scroll")
+                            Image(systemName: "book")
                                 .frame(width: 28, height: 22)
                         }
                         .buttonStyle(.bordered)
-                        .tint(viewMode == .continuous ? .accentColor : nil)
+                        .tint(pageLayout == .twoPage ? .accentColor : nil)
+                        .help("Two Pages")
+                    }
+
+                    Divider()
+                        .frame(height: 20)
+
+                    HStack(spacing: 2) {
+                        Button {
+                            scrollMode = .paged
+                        } label: {
+                            Image(systemName: "square")
+                                .frame(width: 28, height: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(scrollMode == .paged ? .accentColor : nil)
+                        .help("Paged")
+
+                        Button {
+                            scrollMode = .continuous
+                        } label: {
+                            Image(systemName: "square.3.layers.3d.down.left")
+                                .frame(width: 28, height: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(scrollMode == .continuous ? .accentColor : nil)
                         .help("Continuous Scroll")
                     }
 
@@ -113,7 +152,15 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                } else if viewMode == .continuous {
+                } else if scrollMode == .continuous && pageLayout == .twoPage {
+                    ContinuousTwoPageView(
+                        document: document!,
+                        zoom: zoom,
+                        pageCache: pageCache,
+                        currentPage: $currentPage,
+                        scrollTarget: $scrollTarget
+                    )
+                } else if scrollMode == .continuous {
                     ContinuousPageView(
                         document: document!,
                         zoom: zoom,
@@ -121,8 +168,25 @@ struct ContentView: View {
                         currentPage: $currentPage,
                         scrollTarget: $scrollTarget
                     )
+                } else if pageLayout == .twoPage {
+                    if isLoading {
+                        ProgressView("Decoding pages...")
+                    } else if let errorMessage {
+                        VStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                            Text(errorMessage)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let pageImage {
+                        TwoPageView(
+                            leftImage: pageImage,
+                            rightImage: rightPageImage,
+                            zoom: zoom
+                        )
+                    }
                 } else {
-                    // Single page mode
+                    // Single page + paged mode
                     if isLoading {
                         ProgressView("Decoding page...")
                     } else if let errorMessage {
@@ -151,9 +215,17 @@ struct ContentView: View {
                     Spacer()
                     if let document {
                         let page = document.pages[currentPage]
-                        Text("\(page.width)×\(page.height) @ \(page.dpi) DPI")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if pageLayout == .twoPage, currentPage > 0,
+                           currentPage + 1 < document.pageCount {
+                            let right = document.pages[currentPage + 1]
+                            Text("L: \(page.width)×\(page.height)  R: \(right.width)×\(right.height) @ \(page.dpi) DPI")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("\(page.width)×\(page.height) @ \(page.dpi) DPI")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -162,6 +234,25 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 600, minHeight: 400)
+        .onChange(of: pageLayout) { _, newLayout in
+            guard document != nil else { return }
+            if newLayout == .twoPage {
+                currentPage = spreadStartPage(for: currentPage)
+            }
+            if scrollMode == .paged {
+                renderCurrentPage()
+            } else {
+                scrollTarget = currentPage
+            }
+        }
+        .onChange(of: scrollMode) { _, newMode in
+            guard document != nil else { return }
+            if newMode == .paged {
+                renderCurrentPage()
+            } else {
+                scrollTarget = currentPage
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openDjVuFile)) { notification in
             if let url = notification.object as? URL {
                 loadDocument(url: url)
@@ -198,7 +289,7 @@ struct ContentView: View {
                     self.document = doc
                     self.currentPage = 0
                     self.zoom = 1.0
-                    if self.viewMode == .singlePage {
+                    if self.scrollMode == .paged {
                         renderCurrentPage()
                     } else {
                         self.isLoading = false
@@ -215,15 +306,36 @@ struct ContentView: View {
 
     private func navigatePage(_ delta: Int) {
         guard let document else { return }
-        let newPage = currentPage + delta
-        guard newPage >= 0, newPage < document.pageCount else { return }
-        currentPage = newPage
 
-        if viewMode == .continuous {
-            scrollTarget = newPage
+        let step: Int
+        if pageLayout == .twoPage {
+            step = delta * 2
+        } else {
+            step = delta
+        }
+
+        let newPage = currentPage + step
+        guard newPage >= 0, newPage < document.pageCount else { return }
+
+        if pageLayout == .twoPage {
+            currentPage = spreadStartPage(for: newPage)
+        } else {
+            currentPage = newPage
+        }
+
+        if scrollMode == .continuous {
+            scrollTarget = currentPage
         } else {
             renderCurrentPage()
         }
+    }
+
+    /// Returns the start page of the spread containing `page`.
+    /// Spread layout: [0], [1,2], [3,4], ... (page 0 is shown alone as a cover).
+    private func spreadStartPage(for page: Int) -> Int {
+        if page <= 0 { return 0 }
+        // Pages 1,2 -> 1; pages 3,4 -> 3; pages 5,6 -> 5 ...
+        return page % 2 == 0 ? page - 1 : page
     }
 
     private func fitToHeight() {
@@ -240,7 +352,7 @@ struct ContentView: View {
     }
 
     private func handleZoomChanged() {
-        if viewMode == .singlePage {
+        if scrollMode == .paged {
             renderCurrentPage()
         }
         // Continuous mode re-renders automatically via .task(id:) in ContinuousPageSlot
@@ -253,11 +365,28 @@ struct ContentView: View {
         let currentZoom = zoom
         let zoomPercent = Int(currentZoom * 100)
 
-        // Check cache first
+        // Determine right page index for two-page mode
+        let rightIndex: Int? = {
+            guard pageLayout == .twoPage, pageIndex > 0,
+                  pageIndex + 1 < document.pageCount else { return nil }
+            return pageIndex + 1
+        }()
+
+        // Check cache for left page
         if let cached = pageCache.image(forPage: pageIndex, zoom: zoomPercent) {
             self.pageImage = cached
-            self.isLoading = false
-            return
+
+            // Check cache for right page too
+            if let ri = rightIndex,
+               let cachedRight = pageCache.image(forPage: ri, zoom: zoomPercent) {
+                self.rightPageImage = cachedRight
+                self.isLoading = false
+                return
+            } else if rightIndex == nil {
+                self.rightPageImage = nil
+                self.isLoading = false
+                return
+            }
         }
 
         isLoading = true
@@ -265,14 +394,41 @@ struct ContentView: View {
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let cgImage = try document.renderPage(at: pageIndex, scale: currentZoom)
-                let nsImage = NSImage(cgImage: cgImage, size: NSSize(
-                    width: CGFloat(cgImage.width),
-                    height: CGFloat(cgImage.height)
-                ))
+                // Render left page
+                let leftImage: NSImage
+                if let cached = pageCache.image(forPage: pageIndex, zoom: zoomPercent) {
+                    leftImage = cached
+                } else {
+                    let cgImage = try document.renderPage(at: pageIndex, scale: currentZoom)
+                    leftImage = NSImage(cgImage: cgImage, size: NSSize(
+                        width: CGFloat(cgImage.width),
+                        height: CGFloat(cgImage.height)
+                    ))
+                    DispatchQueue.main.async {
+                        self.pageCache.store(leftImage, forPage: pageIndex, zoom: zoomPercent)
+                    }
+                }
+
+                // Render right page if needed
+                var rightImage: NSImage?
+                if let ri = rightIndex {
+                    if let cached = pageCache.image(forPage: ri, zoom: zoomPercent) {
+                        rightImage = cached
+                    } else {
+                        let cgImage = try document.renderPage(at: ri, scale: currentZoom)
+                        rightImage = NSImage(cgImage: cgImage, size: NSSize(
+                            width: CGFloat(cgImage.width),
+                            height: CGFloat(cgImage.height)
+                        ))
+                        DispatchQueue.main.async {
+                            self.pageCache.store(rightImage!, forPage: ri, zoom: zoomPercent)
+                        }
+                    }
+                }
+
                 DispatchQueue.main.async {
-                    self.pageCache.store(nsImage, forPage: pageIndex, zoom: zoomPercent)
-                    self.pageImage = nsImage
+                    self.pageImage = leftImage
+                    self.rightPageImage = rightImage
                     self.isLoading = false
                 }
             } catch {

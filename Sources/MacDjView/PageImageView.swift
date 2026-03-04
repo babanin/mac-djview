@@ -20,6 +20,41 @@ struct PageImageView: View {
     }
 }
 
+// MARK: - TwoPageView
+
+struct TwoPageView: View {
+    let leftImage: NSImage
+    let rightImage: NSImage?
+    let zoom: Double
+
+    var body: some View {
+        ScrollView([.horizontal, .vertical]) {
+            HStack(spacing: 12) {
+                pageSlot(leftImage)
+                if let rightImage {
+                    pageSlot(rightImage)
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    private func pageSlot(_ image: NSImage) -> some View {
+        ZStack {
+            Color.white
+                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+        }
+        .frame(
+            width: image.size.width * zoom,
+            height: image.size.height * zoom
+        )
+    }
+}
+
 // MARK: - RenderToken
 
 private final class RenderToken: Sendable {
@@ -122,6 +157,76 @@ struct ContinuousPageView: View {
                 guard let target else { return }
                 withAnimation {
                     proxy.scrollTo(target, anchor: .top)
+                }
+                scrollTarget = nil
+            }
+        }
+    }
+}
+
+// MARK: - ContinuousTwoPageView
+
+struct ContinuousTwoPageView: View {
+    let document: DjVuDocument
+    let zoom: Double
+    let pageCache: PageCache
+    @Binding var currentPage: Int
+    @Binding var scrollTarget: Int?
+
+    private var spreadCount: Int {
+        if document.pageCount <= 1 { return document.pageCount }
+        return 1 + Int((document.pageCount - 1 + 1) / 2)
+    }
+
+    private func spreadPages(for spreadIndex: Int) -> (left: Int, right: Int?) {
+        if spreadIndex == 0 {
+            return (0, nil)
+        }
+        let left = 1 + (spreadIndex - 1) * 2
+        let right = left + 1
+        return (left, right < document.pageCount ? right : nil)
+    }
+
+    private func spreadIndex(for page: Int) -> Int {
+        if page <= 0 { return 0 }
+        return 1 + (page - 1) / 2
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView([.horizontal, .vertical]) {
+                LazyVStack(spacing: 12) {
+                    ForEach(0..<spreadCount, id: \.self) { sIndex in
+                        let pages = spreadPages(for: sIndex)
+                        HStack(spacing: 12) {
+                            ContinuousPageSlot(
+                                document: document,
+                                pageIndex: pages.left,
+                                zoom: zoom,
+                                pageCache: pageCache
+                            )
+                            if let right = pages.right {
+                                ContinuousPageSlot(
+                                    document: document,
+                                    pageIndex: right,
+                                    zoom: zoom,
+                                    pageCache: pageCache
+                                )
+                            }
+                        }
+                        .id(sIndex)
+                        .onAppear {
+                            currentPage = pages.left
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                let sIndex = spreadIndex(for: target)
+                withAnimation {
+                    proxy.scrollTo(sIndex, anchor: .top)
                 }
                 scrollTarget = nil
             }
