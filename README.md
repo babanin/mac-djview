@@ -2,7 +2,7 @@
 
 A native macOS DjVu document viewer written entirely in Swift — no external C libraries or dependencies. Implements the DjVu file format decoder from scratch, including IFF parsing, ZP-Coder arithmetic decoding, IW44 wavelet image codec, JB2 symbol codec, and layer composition.
 
-![MacDjView screenshot](docs/screenshot.jpeg)
+![MacDjView screenshot](docs/screenshot.png)
 
 ## Features
 

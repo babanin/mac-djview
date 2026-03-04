@@ -3,9 +3,9 @@ import SwiftUI
 @main
 struct MacDjViewApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @FocusedValue(\.documentActions) private var actions
 
     init() {
-        // CLI test mode: render all pages and exit
         let args = ProcessInfo.processInfo.arguments
         if let testIdx = args.firstIndex(of: "--test"), testIdx + 1 < args.count {
             let path = args[testIdx + 1]
@@ -15,18 +15,127 @@ struct MacDjViewApp: App {
     }
 
     var body: some Scene {
-        Window("MacDjView", id: "main") {
+        WindowGroup {
             ContentView()
         }
         .commands {
-            CommandGroup(after: .newItem) {
-                Button("Open...") {
-                    NotificationCenter.default.post(name: .openDjVuFile, object: nil)
+            fileCommands
+            viewCommands
+            goCommands
+        }
+
+        Settings {
+            SettingsView()
+        }
+    }
+
+    // MARK: - File Menu
+
+    @CommandsBuilder
+    private var fileCommands: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("Open...") {
+                actions?.showFileImporter.wrappedValue = true
+            }
+            .keyboardShortcut("o", modifiers: .command)
+        }
+    }
+
+    // MARK: - View Menu
+
+    @CommandsBuilder
+    private var viewCommands: some Commands {
+        CommandGroup(after: .toolbar) {
+            Button("Zoom In") {
+                actions?.adjustZoom(0.25)
+            }
+            .keyboardShortcut("=", modifiers: .command)
+            .disabled(actions?.hasDocument != true)
+
+            Button("Zoom Out") {
+                actions?.adjustZoom(-0.25)
+            }
+            .keyboardShortcut("-", modifiers: .command)
+            .disabled(actions?.hasDocument != true)
+
+            Button("Actual Size") {
+                actions?.zoomToActualSize()
+            }
+            .keyboardShortcut("0", modifiers: .command)
+            .disabled(actions?.hasDocument != true)
+
+            Button("Fit to Height") {
+                actions?.fitToHeight()
+            }
+            .keyboardShortcut("9", modifiers: .command)
+            .disabled(actions?.hasDocument != true)
+
+            Divider()
+
+            if let actions {
+                Picker("Layout", selection: actions.pageLayout) {
+                    Text("Single Page").tag(PageLayout.single)
+                    Text("Two Pages").tag(PageLayout.twoPage)
                 }
-                .keyboardShortcut("o", modifiers: .command)
+                .disabled(!actions.hasDocument)
+
+                Picker("Scroll Mode", selection: actions.scrollMode) {
+                    Text("Paged").tag(ScrollMode.paged)
+                    Text("Continuous").tag(ScrollMode.continuous)
+                }
+                .disabled(!actions.hasDocument)
             }
         }
     }
+
+    // MARK: - Go Menu
+
+    @CommandsBuilder
+    private var goCommands: some Commands {
+        CommandMenu("Go") {
+            Button("Previous Page") {
+                actions?.navigatePage(-1)
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            .disabled(actions?.canGoBack != true)
+
+            Button("Next Page") {
+                actions?.navigatePage(1)
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            .disabled(actions?.canGoForward != true)
+
+            Divider()
+
+            Button("First Page") {
+                actions?.goToFirstPage()
+            }
+            .keyboardShortcut(.home, modifiers: [])
+            .disabled(actions?.canGoBack != true)
+
+            Button("Last Page") {
+                actions?.goToLastPage()
+            }
+            .keyboardShortcut(.end, modifiers: [])
+            .disabled(actions?.canGoForward != true)
+
+            Divider()
+
+            Button("Previous Page") {
+                actions?.navigatePage(-1)
+            }
+            .keyboardShortcut(.pageUp, modifiers: [])
+            .disabled(actions?.canGoBack != true)
+
+            Button("Next Page") {
+                actions?.navigatePage(1)
+            }
+            .keyboardShortcut(.pageDown, modifiers: [])
+            .disabled(actions?.canGoForward != true)
+        }
+    }
+
+    // MARK: - CLI Test
 
     private static func log(_ msg: String) {
         FileHandle.standardError.write(Data((msg + "\n").utf8))
@@ -84,7 +193,6 @@ struct MacDjViewApp: App {
             let totalElapsed = Double(DispatchTime.now().uptimeNanoseconds - totalStart.uptimeNanoseconds) / 1_000_000
             let finalMemory = currentMemoryMB()
 
-            // Summary
             log("")
             log("=== Performance Summary ===")
             log("Pages rendered: \(pageTimes.count)/\(pageCount - startPage) (\(errorCount) errors)")
