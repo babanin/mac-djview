@@ -107,22 +107,37 @@ Key metrics to watch: **p95 render time** and **peak memory**.
 
 ```
 Sources/MacDjView/
-├── DjVu/              # Decoder library
-│   ├── ByteStream.swift
-│   ├── IFFParser.swift
-│   ├── ZPCodec.swift
-│   ├── IW44Decoder.swift
-│   ├── IW44Image.swift
-│   ├── JB2Decoder.swift
-│   ├── JB2Dict.swift
-│   ├── JB2Image.swift
-│   ├── JB2Structures.swift
-│   ├── PageCompositor.swift
-│   ├── DjVuDocument.swift
-│   └── DjVuPage.swift
-├── UI/                # SwiftUI viewer
-└── main.swift
-Tests/MacDjViewTests/  # Unit tests
+├── MacDjViewApp.swift        # App entry point, menu bar commands (File/View/Go), CLI --test mode
+├── AppDelegate.swift         # NSApplicationDelegate — file-open handling via system events
+├── ContentView.swift         # Main window: toolbar, status bar, view-mode switching, file import
+├── DocumentViewModel.swift   # Document state (page, zoom, layout, color theme), navigation, rendering
+├── PageImageView.swift       # Page display views (single/two-page/continuous), PageCache, color themes
+├── Assets.xcassets/          # App icon and asset catalog
+├── PrivacyInfo.xcprivacy     # App privacy manifest
+│
+├── DjVu/                     # Decoder library (pure Swift, no dependencies)
+│   ├── DjVuDocument.swift    # Top-level document: DJVM/DJVU parsing, DIRM directory, page access
+│   ├── DjVuPage.swift        # Single page: chunk inventory, lazy decode of BG44/Sjbz/FGbz layers
+│   ├── DjVuError.swift       # Error types for decoder failures
+│   ├── IFFParser.swift       # IFF85 container parser (FORM:DJVU/DJVM chunks)
+│   ├── ByteStream.swift      # Bit/byte stream reader for all codecs
+│   ├── ZPCodec.swift         # ZP-Coder adaptive binary arithmetic codec
+│   ├── BZZDecoder.swift      # BZZ general-purpose decoder (ZP-based, used for DIRM/Sjbz)
+│   ├── IW44Decoder.swift     # IW44 wavelet codec: progressive decoding of BG44 chunks
+│   ├── IW44Image.swift       # IW44 image reconstruction: inverse wavelet, YCbCr→RGB, pixel output
+│   ├── IW44Structures.swift  # IW44 support types: LinearBytemap, wavelet band constants
+│   ├── JB2Decoder.swift      # JB2 symbol codec: decodes Sjbz streams into bitmaps + placements
+│   ├── JB2Dict.swift         # JB2 shared dictionary decoder (Djbz chunks, cross-page symbol reuse)
+│   ├── JB2Image.swift        # JB2 image: bitmap storage, symbol blitting onto mask layer
+│   ├── JB2Structures.swift   # JB2 support types: Bitmap, NumContext tree, record types
+│   └── PageCompositor.swift  # Layer composition: combines BG44 background + JB2 mask + FGbz palette
+│
+Tests/MacDjViewTests/
+├── ByteStreamTests.swift       # Bit/byte reading correctness
+├── LinearBytemapTests.swift    # Wavelet coefficient storage
+├── IW44ImageTests.swift        # YCbCr→RGB color conversion (SIMD + scalar)
+├── WaveletTransformTests.swift # Forward/inverse wavelet transform
+└── PageCompositorTests.swift   # Layer composition logic
 ```
 
 ## License
