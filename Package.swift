@@ -7,7 +7,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "MacDjView",
-            path: "Sources/MacDjView"
+            path: "Sources/MacDjView",
+            resources: [
+                .process("Assets.xcassets"),
+                .copy("PrivacyInfo.xcprivacy")
+            ]
         )
     ]
 )

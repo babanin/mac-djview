@@ -120,6 +120,11 @@ func decodeBitmap(zp: ZPCodec, width: Int, height: Int, ctx: inout [UInt8]) -> J
 /// Ported from DjVu.js JB2Codec.decodeBitmapRef() + getCtxIndexRef()
 func decodeRefinementBitmap(zp: ZPCodec, width: Int, height: Int,
                             model: JB2Bitmap, ctx: inout [UInt8]) -> JB2Bitmap {
+    // Match JavaScript behavior: if width or height <= 0, the for loops
+    // don't execute, so no ZP bits are consumed. Return empty bitmap.
+    guard width > 0 && height > 0 else {
+        return JB2Bitmap(width: max(width, 0), height: max(height, 0))
+    }
     let cbm = JB2Bitmap(width: width, height: height)
 
     // Alignment: match DjVu.js alignBitmaps()
@@ -164,6 +169,6 @@ func decodeRefinementBitmap(zp: ZPCodec, width: Int, height: Int,
 
 func resetNumContexts(_ ctxs: NumContext...) {
     for ctx in ctxs {
-        ctx.ctx = [0]
+        ctx.reset()
     }
 }

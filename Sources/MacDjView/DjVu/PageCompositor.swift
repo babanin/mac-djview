@@ -65,7 +65,17 @@ enum PageCompositor {
             fgColorBuf = buf
         }
 
-        var output = [UInt8](repeating: 255, count: scaledW * scaledH * 4) // RGBA
+        // Create CGContext and write pixels directly (avoids separate output buffer + copy)
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: scaledW, height: scaledH,
+                                  bitsPerComponent: 8, bytesPerRow: scaledW * 4,
+                                  space: colorSpace,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let data = ctx.data else {
+            throw DjVuError.decodingFailed("Failed to create graphics context")
+        }
+
+        let output = data.assumingMemoryBound(to: UInt8.self)
 
         for y in 0..<scaledH {
             for x in 0..<scaledW {
@@ -117,24 +127,6 @@ enum PageCompositor {
 
                 output[idx] = r; output[idx + 1] = g; output[idx + 2] = b; output[idx + 3] = 255
             }
-        }
-
-        // Create CGImage
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-              let ctx = CGContext(data: nil, width: scaledW, height: scaledH,
-                                  bitsPerComponent: 8, bytesPerRow: scaledW * 4,
-                                  space: colorSpace,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-            throw DjVuError.decodingFailed("Failed to create graphics context")
-        }
-
-        guard let data = ctx.data else {
-            throw DjVuError.decodingFailed("Failed to get context data")
-        }
-
-        let dest = data.assumingMemoryBound(to: UInt8.self)
-        output.withUnsafeBytes { srcPtr in
-            dest.update(from: srcPtr.bindMemory(to: UInt8.self).baseAddress!, count: scaledW * scaledH * 4)
         }
 
         guard let image = ctx.makeImage() else {

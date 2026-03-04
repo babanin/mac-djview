@@ -26,7 +26,9 @@ final class PageCache {
     private let renderQueue = DispatchQueue(label: "com.mac-djview.render", qos: .userInitiated)
 
     init() {
-        cache.countLimit = 20
+        cache.countLimit = 10
+        // 256 MB limit — each image costs width × height × 4 bytes
+        cache.totalCostLimit = 256 * 1024 * 1024
     }
 
     func image(forPage pageIndex: Int, zoom zoomPercent: Int) -> NSImage? {
@@ -34,7 +36,10 @@ final class PageCache {
     }
 
     func store(_ image: NSImage, forPage pageIndex: Int, zoom zoomPercent: Int) {
-        cache.setObject(image, forKey: key(pageIndex, zoomPercent))
+        let w = Int(image.size.width)
+        let h = Int(image.size.height)
+        let cost = w * h * 4
+        cache.setObject(image, forKey: key(pageIndex, zoomPercent), cost: cost)
     }
 
     func removeAll() {
@@ -44,15 +49,19 @@ final class PageCache {
     func render(document: DjVuDocument, pageIndex: Int, scale: Double) async throws -> NSImage {
         try await withCheckedThrowingContinuation { cont in
             renderQueue.async {
-                do {
-                    let cgImage = try document.renderPage(at: pageIndex, scale: scale)
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(
-                        width: CGFloat(cgImage.width),
-                        height: CGFloat(cgImage.height)
-                    ))
-                    cont.resume(returning: nsImage)
-                } catch {
-                    cont.resume(throwing: error)
+                // Wrap in autoreleasepool to ensure temporary CGImage/CG objects are freed
+                // promptly between page renders, rather than accumulating in the queue's pool
+                autoreleasepool {
+                    do {
+                        let cgImage = try document.renderPage(at: pageIndex, scale: scale)
+                        let nsImage = NSImage(cgImage: cgImage, size: NSSize(
+                            width: CGFloat(cgImage.width),
+                            height: CGFloat(cgImage.height)
+                        ))
+                        cont.resume(returning: nsImage)
+                    } catch {
+                        cont.resume(throwing: error)
+                    }
                 }
             }
         }

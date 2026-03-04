@@ -5,7 +5,8 @@ MacDjView is a **pure Swift** DjVu document viewer for macOS — no external C l
 
 ## Quick Reference
 - **Build**: `swift build` (debug) / `swift build -c release` (release)
-- **Run**: `swift run MacDjView` (GUI) / `.build/debug/MacDjView --test example.djvu` (CLI test)
+- **Run**: `swift run MacDjView` (GUI)
+- **CLI test**: `swift run -c release MacDjView -- --test file.djvu [startPage]` — renders all pages, reports per-page timing/memory and summary (avg/median/p95/max time, base/peak/final memory)
 - **App bundle**: `./scripts/make-app-bundle.sh`
 - **Platform**: macOS 14+, Swift 5.10, Swift Package Manager (no Xcode project)
 - **No external dependencies**

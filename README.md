@@ -36,6 +36,40 @@ swift run MacDjView
 
 You can also open the project in Xcode — just open `Package.swift`.
 
+## CLI Test & Performance Testing
+
+The `--test` flag renders all pages headlessly and reports per-page timing and memory usage:
+
+```bash
+# Render all pages (always use release mode for meaningful numbers)
+swift run -c release MacDjView -- --test document.djvu
+
+# Start from a specific page (0-indexed)
+swift run -c release MacDjView -- --test document.djvu 100
+```
+
+Output includes per-page render time and resident memory, plus a summary:
+
+```
+=== Performance Summary ===
+Pages rendered: 1170/1170 (0 errors)
+Total time: 120450ms
+Per-page: avg=103ms median=85ms p95=210ms max=450ms
+Memory: base=52MB peak=380MB final=290MB
+===========================
+```
+
+To catch performance regressions, save and diff results:
+
+```bash
+swift run -c release MacDjView -- --test large.djvu 2> perf-baseline.txt
+# ... make changes ...
+swift run -c release MacDjView -- --test large.djvu 2> perf-after.txt
+diff perf-baseline.txt perf-after.txt
+```
+
+Key metrics to watch: **p95 render time** and **peak memory**.
+
 ## Contributing
 
 1. Fork the repository and create a feature branch

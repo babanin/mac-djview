@@ -4,16 +4,16 @@ import CoreGraphics
 final class DjVuPage {
     let chunk: IFFChunk
     let info: DjVuDocument.PageInfo
-    let sharedDicts: [JB2Dict]
+    let sharedDict: JB2Dict?
 
     let width: Int
     let height: Int
     let dpi: Int
 
-    init(chunk: IFFChunk, info: DjVuDocument.PageInfo, sharedDicts: [JB2Dict]) {
+    init(chunk: IFFChunk, info: DjVuDocument.PageInfo, sharedDict: JB2Dict?) {
         self.chunk = chunk
         self.info = info
-        self.sharedDicts = sharedDicts
+        self.sharedDict = sharedDict
         self.width = info.width
         self.height = info.height
         self.dpi = info.dpi
@@ -69,8 +69,7 @@ final class DjVuPage {
         // Decode mask (JB2)
         var maskImage: JB2Image?
         if let sjbzData {
-            let dict: JB2Dict? = sharedDicts.first // Use first shared dict if available
-            maskImage = try JB2Decoder.decode(data: sjbzData, sharedDict: dict)
+            maskImage = try JB2Decoder.decode(data: sjbzData, sharedDict: sharedDict)
         }
 
         // Decode foreground colors palette

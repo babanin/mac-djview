@@ -93,4 +93,25 @@ final class ByteStream {
         }
         return 0xFF
     }
+
+    /// Create a new stream from the remaining data (DjVu.js fork())
+    func fork() -> ByteStream {
+        let start = data.startIndex + offset
+        let end = data.endIndex
+        return ByteStream(data: data[start..<end])
+    }
+
+    /// Read a null-terminated string
+    func readStrNT() -> String {
+        var bytes: [UInt8] = []
+        while offset < data.count {
+            let b = data[data.startIndex + offset]
+            offset += 1
+            if b == 0 { break }
+            bytes.append(b)
+        }
+        return String(bytes: bytes, encoding: .utf8) ?? ""
+    }
+
+    var isEmpty: Bool { offset >= data.count }
 }

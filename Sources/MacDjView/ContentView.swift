@@ -24,7 +24,6 @@ struct ContentView: View {
             // Toolbar
             HStack {
                 Button("Open") { openFile() }
-                    .keyboardShortcut("o", modifiers: .command)
 
                 Spacer()
 
@@ -152,8 +151,12 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 600, minHeight: 400)
-        .onReceive(NotificationCenter.default.publisher(for: .openDjVuFile)) { _ in
-            openFile()
+        .onReceive(NotificationCenter.default.publisher(for: .openDjVuFile)) { notification in
+            if let url = notification.object as? URL {
+                loadDocument(url: url)
+            } else {
+                openFile()
+            }
         }
     }
 

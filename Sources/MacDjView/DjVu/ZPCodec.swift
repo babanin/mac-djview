@@ -274,6 +274,13 @@ final class NumContext {
         if _right == nil { _right = NumContext() }
         return _right!
     }
+
+    /// Reset entire context tree to initial state (matches DjVu.js `new NumContext()`)
+    func reset() {
+        ctx = [0]
+        _left = nil
+        _right = nil
+    }
 }
 
 // MARK: - Number decoding for JB2
