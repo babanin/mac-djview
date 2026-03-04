@@ -11,11 +11,18 @@ enum ScrollMode: String, CaseIterable {
     case continuous = "Continuous"
 }
 
+enum ColorTheme: String, CaseIterable, Codable {
+    case normal = "Normal"
+    case inverted = "Inverted"
+    case sepia = "Sepia"
+}
+
 private struct DocumentState: Codable {
     var currentPage: Int
     var zoom: Double
     var pageLayout: String
     var scrollMode: String
+    var colorTheme: String?
 }
 
 @Observable
@@ -30,6 +37,7 @@ final class DocumentViewModel {
     var fileName: String?
     var pageLayout: PageLayout = .single
     var scrollMode: ScrollMode = .paged
+    var colorTheme: ColorTheme = .normal
     var scrollTarget: Int?
     var documentURL: URL?
     var showFileImporter = false
@@ -114,6 +122,13 @@ final class DocumentViewModel {
         return page % 2 == 0 ? page - 1 : page
     }
 
+    func cycleColorTheme() {
+        let all = ColorTheme.allCases
+        let idx = all.firstIndex(of: colorTheme)!
+        colorTheme = all[(idx + 1) % all.count]
+        saveDocumentState()
+    }
+
     // MARK: - Zoom
 
     func adjustZoom(_ delta: Double) {
@@ -192,6 +207,9 @@ final class DocumentViewModel {
                         }
                         if let mode = ScrollMode(rawValue: saved.scrollMode) {
                             self.scrollMode = mode
+                        }
+                        if let theme = saved.colorTheme.flatMap({ ColorTheme(rawValue: $0) }) {
+                            self.colorTheme = theme
                         }
                     } else {
                         self.currentPage = 0
@@ -303,7 +321,8 @@ final class DocumentViewModel {
             currentPage: currentPage,
             zoom: zoom,
             pageLayout: pageLayout.rawValue,
-            scrollMode: scrollMode.rawValue
+            scrollMode: scrollMode.rawValue,
+            colorTheme: colorTheme.rawValue
         )
         guard let data = try? JSONEncoder().encode(state) else { return }
         UserDefaults.standard.set(data, forKey: "docState:\(documentURL.path)")
@@ -329,6 +348,7 @@ struct DocumentActions {
     var canGoBack: Bool
     var canGoForward: Bool
     var hasDocument: Bool
+    var colorTheme: Binding<ColorTheme>
     var pageLayout: Binding<PageLayout>
     var scrollMode: Binding<ScrollMode>
     var showFileImporter: Binding<Bool>

@@ -79,6 +79,7 @@ struct ContentView: View {
                         document: viewModel.document!,
                         zoom: viewModel.zoom,
                         pageCache: viewModel.pageCache,
+                        colorTheme: viewModel.colorTheme,
                         currentPage: Binding(
                             get: { viewModel.currentPage },
                             set: { viewModel.currentPage = $0 }
@@ -93,6 +94,7 @@ struct ContentView: View {
                         document: viewModel.document!,
                         zoom: viewModel.zoom,
                         pageCache: viewModel.pageCache,
+                        colorTheme: viewModel.colorTheme,
                         currentPage: Binding(
                             get: { viewModel.currentPage },
                             set: { viewModel.currentPage = $0 }
@@ -116,7 +118,8 @@ struct ContentView: View {
                         TwoPageView(
                             leftImage: pageImage,
                             rightImage: viewModel.rightPageImage,
-                            zoom: viewModel.zoom
+                            zoom: viewModel.zoom,
+                            colorTheme: viewModel.colorTheme
                         )
                     }
                 } else {
@@ -130,7 +133,7 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                         }
                     } else if let pageImage = viewModel.pageImage {
-                        PageImageView(image: pageImage, zoom: viewModel.zoom)
+                        PageImageView(image: pageImage, zoom: viewModel.zoom, colorTheme: viewModel.colorTheme)
                     }
                 }
             }
@@ -186,6 +189,25 @@ struct ContentView: View {
         }
 
         ToolbarItemGroup(placement: .automatic) {
+            Menu {
+                ForEach(ColorTheme.allCases, id: \.self) { theme in
+                    Button {
+                        viewModel.colorTheme = theme
+                        viewModel.saveDocumentState()
+                    } label: {
+                        if viewModel.colorTheme == theme {
+                            Label(theme.rawValue, systemImage: "checkmark")
+                        } else {
+                            Text(theme.rawValue)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "circle.lefthalf.filled")
+            }
+            .help("Color Theme")
+            .disabled(!viewModel.hasDocument)
+
             Button { viewModel.adjustZoom(-0.25) } label: {
                 Image(systemName: "minus.magnifyingglass")
             }
@@ -252,6 +274,10 @@ struct ContentView: View {
             canGoBack: viewModel.canGoBack,
             canGoForward: viewModel.canGoForward,
             hasDocument: viewModel.hasDocument,
+            colorTheme: Binding(
+                get: { viewModel.colorTheme },
+                set: { viewModel.colorTheme = $0 }
+            ),
             pageLayout: Binding(
                 get: { viewModel.pageLayout },
                 set: { viewModel.pageLayout = $0 }

@@ -73,6 +73,25 @@ struct MacDjViewApp: App {
             Divider()
 
             if let actions {
+                Picker("Color Theme", selection: actions.colorTheme) {
+                    ForEach(ColorTheme.allCases, id: \.self) { theme in
+                        Text(theme.rawValue).tag(theme)
+                    }
+                }
+                .disabled(!actions.hasDocument)
+
+                Button("Cycle Color Theme") {
+                    actions.colorTheme.wrappedValue = {
+                        let all = ColorTheme.allCases
+                        let idx = all.firstIndex(of: actions.colorTheme.wrappedValue)!
+                        return all[(idx + 1) % all.count]
+                    }()
+                }
+                .keyboardShortcut("i", modifiers: .command)
+                .disabled(!actions.hasDocument)
+
+                Divider()
+
                 Picker("Layout", selection: actions.pageLayout) {
                     Text("Single Page").tag(PageLayout.single)
                     Text("Two Pages").tag(PageLayout.twoPage)

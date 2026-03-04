@@ -2,15 +2,42 @@ import SwiftUI
 import AppKit
 import os
 
+private let sepiaColor = Color(red: 1.0, green: 0.94, blue: 0.84)
+
+private func pageBackgroundColor(for theme: ColorTheme) -> Color {
+    switch theme {
+    case .normal: .white
+    case .inverted: .black
+    case .sepia: sepiaColor
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyColorTheme(_ theme: ColorTheme) -> some View {
+        switch theme {
+        case .normal:
+            self
+        case .inverted:
+            self.colorInvert()
+        case .sepia:
+            self.saturation(0.5)
+                .colorMultiply(sepiaColor)
+        }
+    }
+}
+
 struct PageImageView: View {
     let image: NSImage
     let zoom: Double
+    var colorTheme: ColorTheme = .normal
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
+                .applyColorTheme(colorTheme)
                 .frame(
                     width: image.size.width * zoom,
                     height: image.size.height * zoom
@@ -26,6 +53,7 @@ struct TwoPageView: View {
     let leftImage: NSImage
     let rightImage: NSImage?
     let zoom: Double
+    var colorTheme: ColorTheme = .normal
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
@@ -41,12 +69,13 @@ struct TwoPageView: View {
 
     private func pageSlot(_ image: NSImage) -> some View {
         ZStack {
-            Color.white
+            pageBackgroundColor(for: colorTheme)
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
+                .applyColorTheme(colorTheme)
         }
         .frame(
             width: image.size.width * zoom,
@@ -131,6 +160,7 @@ struct ContinuousPageView: View {
     let document: DjVuDocument
     let zoom: Double
     let pageCache: PageCache
+    var colorTheme: ColorTheme = .normal
     @Binding var currentPage: Int
     @Binding var scrollTarget: Int?
 
@@ -143,7 +173,8 @@ struct ContinuousPageView: View {
                             document: document,
                             pageIndex: pageIndex,
                             zoom: zoom,
-                            pageCache: pageCache
+                            pageCache: pageCache,
+                            colorTheme: colorTheme
                         )
                         .id(pageIndex)
                         .onAppear {
@@ -170,6 +201,7 @@ struct ContinuousTwoPageView: View {
     let document: DjVuDocument
     let zoom: Double
     let pageCache: PageCache
+    var colorTheme: ColorTheme = .normal
     @Binding var currentPage: Int
     @Binding var scrollTarget: Int?
 
@@ -203,14 +235,16 @@ struct ContinuousTwoPageView: View {
                                 document: document,
                                 pageIndex: pages.left,
                                 zoom: zoom,
-                                pageCache: pageCache
+                                pageCache: pageCache,
+                                colorTheme: colorTheme
                             )
                             if let right = pages.right {
                                 ContinuousPageSlot(
                                     document: document,
                                     pageIndex: right,
                                     zoom: zoom,
-                                    pageCache: pageCache
+                                    pageCache: pageCache,
+                                    colorTheme: colorTheme
                                 )
                             }
                         }
@@ -241,6 +275,7 @@ struct ContinuousPageSlot: View {
     let pageIndex: Int
     let zoom: Double
     let pageCache: PageCache
+    var colorTheme: ColorTheme = .normal
 
     @State private var image: NSImage?
     @State private var error: String?
@@ -255,13 +290,14 @@ struct ContinuousPageSlot: View {
 
     var body: some View {
         ZStack {
-            Color.white
+            pageBackgroundColor(for: colorTheme)
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
             if let image {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
+                    .applyColorTheme(colorTheme)
             } else if let error {
                 VStack {
                     Image(systemName: "exclamationmark.triangle")
