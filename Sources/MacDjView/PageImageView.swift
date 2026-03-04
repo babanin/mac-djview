@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import os
 
 struct PageImageView: View {
     let image: NSImage
@@ -17,6 +18,14 @@ struct PageImageView: View {
                 .padding(20)
         }
     }
+}
+
+// MARK: - RenderToken
+
+private final class RenderToken: Sendable {
+    private let _cancelled = OSAllocatedUnfairLock(initialState: false)
+    var isCancelled: Bool { _cancelled.withLock { $0 } }
+    func cancel() { _cancelled.withLock { $0 = true } }
 }
 
 // MARK: - PageCache
@@ -47,23 +56,32 @@ final class PageCache {
     }
 
     func render(document: DjVuDocument, pageIndex: Int, scale: Double) async throws -> NSImage {
-        try await withCheckedThrowingContinuation { cont in
-            renderQueue.async {
-                // Wrap in autoreleasepool to ensure temporary CGImage/CG objects are freed
-                // promptly between page renders, rather than accumulating in the queue's pool
-                autoreleasepool {
-                    do {
-                        let cgImage = try document.renderPage(at: pageIndex, scale: scale)
-                        let nsImage = NSImage(cgImage: cgImage, size: NSSize(
-                            width: CGFloat(cgImage.width),
-                            height: CGFloat(cgImage.height)
-                        ))
-                        cont.resume(returning: nsImage)
-                    } catch {
-                        cont.resume(throwing: error)
+        let token = RenderToken()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                renderQueue.async {
+                    if token.isCancelled {
+                        cont.resume(throwing: CancellationError())
+                        return
+                    }
+                    // Wrap in autoreleasepool to ensure temporary CGImage/CG objects are freed
+                    // promptly between page renders, rather than accumulating in the queue's pool
+                    autoreleasepool {
+                        do {
+                            let cgImage = try document.renderPage(at: pageIndex, scale: scale)
+                            let nsImage = NSImage(cgImage: cgImage, size: NSSize(
+                                width: CGFloat(cgImage.width),
+                                height: CGFloat(cgImage.height)
+                            ))
+                            cont.resume(returning: nsImage)
+                        } catch {
+                            cont.resume(throwing: error)
+                        }
                     }
                 }
             }
+        } onCancel: {
+            token.cancel()
         }
     }
 
