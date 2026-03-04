@@ -36,6 +36,20 @@ swift run MacDjView
 
 You can also open the project in Xcode — just open `Package.swift`.
 
+## Unit Tests
+
+```bash
+# Run all unit tests
+make unit-test
+
+# Or directly
+./scripts/run-tests.sh
+```
+
+Tests cover the decoder's post-decode pipeline: ByteStream reads, LinearBytemap wavelet storage, IW44 color conversion (SIMD and scalar paths), wavelet transform correctness, and PageCompositor layer composition.
+
+CI runs automatically on pushes to `main` and pull requests via GitHub Actions.
+
 ## CLI Test & Performance Testing
 
 The `--test` flag renders all pages headlessly and reports per-page timing and memory usage:
@@ -78,7 +92,8 @@ Key metrics to watch: **p95 render time** and **peak memory**.
    - [Naming conventions](./docs/naming-conventions.md)
    - [Architecture overview](./docs/architecture.md)
    - [Git conventions](./docs/git-conventions.md)
-3. Build and test: `swift build && .build/debug/MacDjView --test <your-file>.djvu`
+3. Run unit tests: `make unit-test`
+4. Visual test: `.build/debug/MacDjView --test <your-file>.djvu`
 4. Submit a pull request
 
 ### Key guidelines
@@ -107,6 +122,7 @@ Sources/MacDjView/
 │   └── DjVuPage.swift
 ├── UI/                # SwiftUI viewer
 └── main.swift
+Tests/MacDjViewTests/  # Unit tests
 ```
 
 ## License

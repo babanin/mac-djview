@@ -15,6 +15,11 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-dead_strip"])
             ]
+        ),
+        .testTarget(
+            name: "MacDjViewTests",
+            dependencies: ["MacDjView"],
+            path: "Tests/MacDjViewTests"
         )
     ]
 )

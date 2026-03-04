@@ -1,4 +1,4 @@
-.PHONY: build release run test app clean
+.PHONY: build release run test unit-test app clean
 
 build:
 	swift build
@@ -11,6 +11,9 @@ run:
 
 test:
 	swift run MacDjView --test example.djvu
+
+unit-test:
+	./scripts/run-tests.sh
 
 app: release
 	./scripts/make-app-bundle.sh
