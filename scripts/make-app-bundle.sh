@@ -1,0 +1,67 @@
+#!/bin/bash
+set -e
+
+cd "$(dirname "$0")/.."
+
+echo "Building MacDjView..."
+swift build -c release
+
+APP_DIR="MacDjView.app/Contents"
+mkdir -p "$APP_DIR/MacOS"
+mkdir -p "$APP_DIR/Resources"
+
+# Copy binary
+cp .build/release/MacDjView "$APP_DIR/MacOS/"
+
+# Write Info.plist
+cat > "$APP_DIR/Info.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>MacDjView</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.mac-djview.MacDjView</string>
+    <key>CFBundleName</key>
+    <string>MacDjView</string>
+    <key>CFBundleDisplayName</key>
+    <string>MacDjView</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>DjVu Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.djvu.djvu</string>
+            </array>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>djvu</string>
+                <string>djv</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
+PLIST
+
+echo "Created MacDjView.app"
+echo "Run with: open MacDjView.app"
