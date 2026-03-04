@@ -39,6 +39,32 @@ enum PageCompositor {
             maskBitmap = mask.render()
         }
 
+        // Pre-render foreground palette colors into a buffer (DjVu bottom-up coords)
+        // so we do O(1) lookup per pixel instead of scanning all blits
+        var fgColorBuf: [UInt8]?
+        if let fgPalette, let mask {
+            var buf = [UInt8](repeating: 0, count: width * height * 3)
+            for (blitIdx, blit) in mask.blits.enumerated() {
+                guard blitIdx < fgPalette.blitColors.count else { continue }
+                let colorIdx = fgPalette.blitColors[blitIdx]
+                guard colorIdx < fgPalette.colors.count else { continue }
+                let color = fgPalette.colors[colorIdx]
+                for by in 0..<blit.bitmap.height {
+                    for bx in 0..<blit.bitmap.width {
+                        if blit.bitmap.get(by, bx) != 0 {
+                            let px = blit.x + bx
+                            let py = blit.y + by
+                            if px >= 0 && px < width && py >= 0 && py < height {
+                                let i = (py * width + px) * 3
+                                buf[i] = color.r; buf[i + 1] = color.g; buf[i + 2] = color.b
+                            }
+                        }
+                    }
+                }
+            }
+            fgColorBuf = buf
+        }
+
         var output = [UInt8](repeating: 255, count: scaledW * scaledH * 4) // RGBA
 
         for y in 0..<scaledH {
@@ -62,27 +88,10 @@ enum PageCompositor {
 
                 if isMasked {
                     // Use foreground color
-                    if let fgPalette, let mask {
+                    if let fgColorBuf {
                         let djvuY = height - 1 - py
-                        var colorFound = false
-                        for (blitIdx, blit) in mask.blits.enumerated().reversed() {
-                            let bx = px - blit.x
-                            let by = djvuY - blit.y
-                            if bx >= 0 && bx < blit.bitmap.width && by >= 0 && by < blit.bitmap.height {
-                                if blit.bitmap.get(by, bx) != 0 {
-                                    if blitIdx < fgPalette.blitColors.count {
-                                        let colorIdx = fgPalette.blitColors[blitIdx]
-                                        if colorIdx < fgPalette.colors.count {
-                                            let color = fgPalette.colors[colorIdx]
-                                            r = color.r; g = color.g; b = color.b
-                                            colorFound = true
-                                        }
-                                    }
-                                    break
-                                }
-                            }
-                        }
-                        if !colorFound { r = 0; g = 0; b = 0 }
+                        let i = (djvuY * width + px) * 3
+                        r = fgColorBuf[i]; g = fgColorBuf[i + 1]; b = fgColorBuf[i + 2]
                     } else if let fgPixels {
                         // Sample from foreground IW44 image (already top-down)
                         let fgX = min(px * fgW / max(1, width), fgW - 1)

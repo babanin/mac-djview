@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct PageImageView: View {
     let image: NSImage
@@ -14,6 +15,170 @@ struct PageImageView: View {
                     height: image.size.height * zoom
                 )
                 .padding(20)
+        }
+    }
+}
+
+// MARK: - PageCache
+
+final class PageCache {
+    private let cache = NSCache<NSString, NSImage>()
+    private let renderQueue = DispatchQueue(label: "com.mac-djview.render", qos: .userInitiated)
+
+    init() {
+        cache.countLimit = 20
+    }
+
+    func image(forPage pageIndex: Int, zoom zoomPercent: Int) -> NSImage? {
+        cache.object(forKey: key(pageIndex, zoomPercent))
+    }
+
+    func store(_ image: NSImage, forPage pageIndex: Int, zoom zoomPercent: Int) {
+        cache.setObject(image, forKey: key(pageIndex, zoomPercent))
+    }
+
+    func removeAll() {
+        cache.removeAllObjects()
+    }
+
+    func render(document: DjVuDocument, pageIndex: Int, scale: Double) async throws -> NSImage {
+        try await withCheckedThrowingContinuation { cont in
+            renderQueue.async {
+                do {
+                    let cgImage = try document.renderPage(at: pageIndex, scale: scale)
+                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(
+                        width: CGFloat(cgImage.width),
+                        height: CGFloat(cgImage.height)
+                    ))
+                    cont.resume(returning: nsImage)
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func key(_ pageIndex: Int, _ zoomPercent: Int) -> NSString {
+        "\(pageIndex)@\(zoomPercent)" as NSString
+    }
+}
+
+// MARK: - ContinuousPageView
+
+struct ContinuousPageView: View {
+    let document: DjVuDocument
+    let zoom: Double
+    let pageCache: PageCache
+    @Binding var currentPage: Int
+    @Binding var scrollTarget: Int?
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView([.horizontal, .vertical]) {
+                LazyVStack(spacing: 12) {
+                    ForEach(0..<document.pageCount, id: \.self) { pageIndex in
+                        ContinuousPageSlot(
+                            document: document,
+                            pageIndex: pageIndex,
+                            zoom: zoom,
+                            pageCache: pageCache
+                        )
+                        .id(pageIndex)
+                        .onAppear {
+                            currentPage = pageIndex
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                withAnimation {
+                    proxy.scrollTo(target, anchor: .top)
+                }
+                scrollTarget = nil
+            }
+        }
+    }
+}
+
+// MARK: - ContinuousPageSlot
+
+struct ContinuousPageSlot: View {
+    let document: DjVuDocument
+    let pageIndex: Int
+    let zoom: Double
+    let pageCache: PageCache
+
+    @State private var image: NSImage?
+    @State private var error: String?
+
+    private var pageWidth: CGFloat {
+        CGFloat(document.pages[pageIndex].width) * zoom
+    }
+
+    private var pageHeight: CGFloat {
+        CGFloat(document.pages[pageIndex].height) * zoom
+    }
+
+    var body: some View {
+        ZStack {
+            Color.white
+                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+            } else if let error {
+                VStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ProgressView()
+            }
+        }
+        .frame(width: pageWidth, height: pageHeight)
+        .task(id: TaskKey(pageIndex: pageIndex, zoom: zoom)) {
+            await loadImage()
+        }
+    }
+
+    private struct TaskKey: Equatable {
+        let pageIndex: Int
+        let zoom: Double
+    }
+
+    private func loadImage() async {
+        let zoomPercent = Int(zoom * 100)
+
+        if let cached = pageCache.image(forPage: pageIndex, zoom: zoomPercent) {
+            self.image = cached
+            return
+        }
+
+        self.image = nil
+        self.error = nil
+
+        let doc = document
+        let idx = pageIndex
+        let scale = zoom
+
+        do {
+            let nsImage = try await pageCache.render(
+                document: doc, pageIndex: idx, scale: scale
+            )
+            try Task.checkCancellation()
+            pageCache.store(nsImage, forPage: idx, zoom: zoomPercent)
+            self.image = nsImage
+        } catch is CancellationError {
+            // Slot recycled by LazyVStack — ignore
+        } catch {
+            self.error = "Page \(idx + 1): \(error.localizedDescription)"
         }
     }
 }

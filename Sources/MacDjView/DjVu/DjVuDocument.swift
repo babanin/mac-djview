@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-final class DjVuDocument {
+final class DjVuDocument: @unchecked Sendable {
     struct PageInfo {
         let width: Int
         let height: Int

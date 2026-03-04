@@ -1,6 +1,11 @@
 import SwiftUI
 import AppKit
 
+enum ViewMode: String, CaseIterable {
+    case singlePage = "Single Page"
+    case continuous = "Continuous"
+}
+
 struct ContentView: View {
     @State private var document: DjVuDocument?
     @State private var currentPage = 0
@@ -9,6 +14,10 @@ struct ContentView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var fileName: String?
+    @State private var viewMode: ViewMode = .singlePage
+    @State private var pageCache = PageCache()
+    @State private var scrollTarget: Int?
+    @State private var viewportSize: CGSize = .zero
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +42,30 @@ struct ContentView: View {
 
                     Spacer()
 
+                    HStack(spacing: 2) {
+                        Button {
+                            viewMode = .singlePage
+                        } label: {
+                            Image(systemName: "doc")
+                                .frame(width: 28, height: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(viewMode == .singlePage ? .accentColor : nil)
+                        .help("Single Page")
+
+                        Button {
+                            viewMode = .continuous
+                        } label: {
+                            Image(systemName: "scroll")
+                                .frame(width: 28, height: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(viewMode == .continuous ? .accentColor : nil)
+                        .help("Continuous Scroll")
+                    }
+
+                    Spacer()
+
                     Button("−") { adjustZoom(-0.25) }
                         .keyboardShortcut("-", modifiers: .command)
                     Text("\(Int(zoom * 100))%")
@@ -40,7 +73,7 @@ struct ContentView: View {
                         .frame(width: 50)
                     Button("+") { adjustZoom(0.25) }
                         .keyboardShortcut("=", modifiers: .command)
-                    Button("Fit") { zoom = 1.0; renderCurrentPage() }
+                    Button("Fit") { fitToHeight(); handleZoomChanged() }
                 }
             }
             .padding(8)
@@ -49,30 +82,54 @@ struct ContentView: View {
             Divider()
 
             // Content area
+            GeometryReader { geo in
             ZStack {
                 Color(nsColor: .controlBackgroundColor)
 
-                if isLoading {
-                    ProgressView("Decoding page...")
-                } else if let errorMessage {
-                    VStack {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                        Text(errorMessage)
-                            .foregroundStyle(.secondary)
+                if document == nil {
+                    if let errorMessage {
+                        VStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                            Text(errorMessage)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "doc.richtext")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.secondary)
+                            Text("Open a DjVu file to begin")
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                } else if let pageImage {
-                    PageImageView(image: pageImage, zoom: zoom)
+                } else if viewMode == .continuous {
+                    ContinuousPageView(
+                        document: document!,
+                        zoom: zoom,
+                        pageCache: pageCache,
+                        currentPage: $currentPage,
+                        scrollTarget: $scrollTarget
+                    )
                 } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "doc.richtext")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
-                        Text("Open a DjVu file to begin")
-                            .foregroundStyle(.secondary)
+                    // Single page mode
+                    if isLoading {
+                        ProgressView("Decoding page...")
+                    } else if let errorMessage {
+                        VStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                            Text(errorMessage)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let pageImage {
+                        PageImageView(image: pageImage, zoom: zoom)
                     }
                 }
             }
+            .onAppear { viewportSize = geo.size }
+            .onChange(of: geo.size) { _, newSize in viewportSize = newSize }
+            } // GeometryReader
 
             // Status bar
             if let fileName {
@@ -117,6 +174,7 @@ struct ContentView: View {
         errorMessage = nil
         pageImage = nil
         fileName = url.lastPathComponent
+        pageCache.removeAll()
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
@@ -126,7 +184,11 @@ struct ContentView: View {
                     self.document = doc
                     self.currentPage = 0
                     self.zoom = 1.0
-                    renderCurrentPage()
+                    if self.viewMode == .singlePage {
+                        renderCurrentPage()
+                    } else {
+                        self.isLoading = false
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -142,21 +204,50 @@ struct ContentView: View {
         let newPage = currentPage + delta
         guard newPage >= 0, newPage < document.pageCount else { return }
         currentPage = newPage
-        renderCurrentPage()
+
+        if viewMode == .continuous {
+            scrollTarget = newPage
+        } else {
+            renderCurrentPage()
+        }
+    }
+
+    private func fitToHeight() {
+        guard let document else { return }
+        let page = document.pages[currentPage]
+        let availableHeight = viewportSize.height - 40  // subtract padding (20 top + 20 bottom)
+        guard availableHeight > 0, page.height > 0 else { return }
+        zoom = max(0.25, min(4.0, availableHeight / CGFloat(page.height)))
     }
 
     private func adjustZoom(_ delta: Double) {
         zoom = max(0.25, min(4.0, zoom + delta))
-        renderCurrentPage()
+        handleZoomChanged()
+    }
+
+    private func handleZoomChanged() {
+        if viewMode == .singlePage {
+            renderCurrentPage()
+        }
+        // Continuous mode re-renders automatically via .task(id:) in ContinuousPageSlot
     }
 
     private func renderCurrentPage() {
         guard let document else { return }
-        isLoading = true
-        errorMessage = nil
 
         let pageIndex = currentPage
         let currentZoom = zoom
+        let zoomPercent = Int(currentZoom * 100)
+
+        // Check cache first
+        if let cached = pageCache.image(forPage: pageIndex, zoom: zoomPercent) {
+            self.pageImage = cached
+            self.isLoading = false
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
@@ -166,6 +257,7 @@ struct ContentView: View {
                     height: CGFloat(cgImage.height)
                 ))
                 DispatchQueue.main.async {
+                    self.pageCache.store(nsImage, forPage: pageIndex, zoom: zoomPercent)
                     self.pageImage = nsImage
                     self.isLoading = false
                 }
