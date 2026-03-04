@@ -39,6 +39,17 @@ struct ContentView: View {
                         .disabled(currentPage >= document.pageCount - 1)
                         .keyboardShortcut(.rightArrow, modifiers: [])
 
+                    // Page Up / Page Down navigation
+                    Button("") { navigatePage(-1) }
+                        .keyboardShortcut(.pageUp, modifiers: [])
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+
+                    Button("") { navigatePage(1) }
+                        .keyboardShortcut(.pageDown, modifiers: [])
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+
                     Spacer()
 
                     HStack(spacing: 2) {
