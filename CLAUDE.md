@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## Project Overview
-MacDjView is a **pure Swift** DjVu document viewer for macOS — no external C libraries. It implements the DjVu file format decoder from scratch (IFF parser, ZP-Coder, IW44 wavelet, JB2 symbol codec, layer composition) and renders pages via a native SwiftUI/AppKit UI.
+MacDjView is a **pure Swift** DjVu document viewer for macOS, iPad, and iPhone — no external C libraries. It implements the DjVu file format decoder from scratch (IFF parser, ZP-Coder, IW44 wavelet, JB2 symbol codec, layer composition) and renders pages via a native SwiftUI/AppKit UI.
 
 ## Quick Reference
 - **Build**: `swift build` (debug) / `swift build -c release` (release)
@@ -9,7 +9,7 @@ MacDjView is a **pure Swift** DjVu document viewer for macOS — no external C l
 - **Unit tests**: `make unit-test` (or `./scripts/run-tests.sh`)
 - **CLI test**: `swift run -c release MacDjView -- --test file.djvu [startPage]` — renders all pages, reports per-page timing/memory and summary (avg/median/p95/max time, base/peak/final memory)
 - **App bundle**: `./scripts/make-app-bundle.sh`
-- **Platform**: macOS 14+, Swift 5.10, Swift Package Manager (no Xcode project)
+- **Platform**: macOS 14+ / iOS 17+ / iPadOS 17+, Swift 5.10, Swift Package Manager
 - **No external dependencies**
 
 ## Coding Conventions

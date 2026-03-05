@@ -2,9 +2,12 @@ import SwiftUI
 
 @main
 struct MacDjViewApp: App {
+    #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @FocusedValue(\.documentActions) private var actions
+    #endif
 
+    #if os(macOS)
     init() {
         let args = ProcessInfo.processInfo.arguments
         if let testIdx = args.firstIndex(of: "--test"), testIdx + 1 < args.count {
@@ -13,24 +16,35 @@ struct MacDjViewApp: App {
             exit(0)
         }
     }
+    #endif
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+            #if !os(macOS)
+                .onOpenURL { url in
+                    OpenURLHandler.shared.pendingURL = url
+                }
+            #endif
         }
+        #if os(macOS)
         .commands {
             fileCommands
             viewCommands
             goCommands
         }
+        #endif
 
+        #if os(macOS)
         Settings {
             SettingsView()
         }
+        #endif
     }
 
     // MARK: - File Menu
 
+    #if os(macOS)
     @CommandsBuilder
     private var fileCommands: some Commands {
         CommandGroup(after: .newItem) {
@@ -230,4 +244,5 @@ struct MacDjViewApp: App {
             log("Failed to open document: \(error)")
         }
     }
+    #endif
 }

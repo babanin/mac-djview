@@ -1,4 +1,3 @@
-import Cocoa
 import SwiftUI
 
 @Observable
@@ -6,6 +5,9 @@ class OpenURLHandler {
     static let shared = OpenURLHandler()
     var pendingURL: URL?
 }
+
+#if os(macOS)
+import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         OpenURLHandler.shared.pendingURL = url
     }
 }
+#endif
 
 // MARK: - Settings
 
@@ -52,7 +55,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
         .frame(width: 400)
+        #endif
         .navigationTitle("Settings")
     }
 }

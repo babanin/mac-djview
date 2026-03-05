@@ -1,17 +1,23 @@
 import SwiftUI
-import AppKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var viewModel = DocumentViewModel()
     @State private var viewportSize: CGSize = .zero
+    #if !os(macOS)
+    @State private var showSettings = false
+    #endif
     private var openURLHandler = OpenURLHandler.shared
 
     var body: some View {
         contentArea
+            #if os(macOS)
             .frame(minWidth: 600, minHeight: 400)
+            #endif
             .navigationTitle(viewModel.fileName ?? "MacDjView")
+            #if os(macOS)
             .navigationSubtitle(viewModel.navigationSubtitleText)
+            #endif
             .toolbar { toolbarContent }
             .safeAreaInset(edge: .bottom) { statusBar }
             .fileImporter(
@@ -29,7 +35,9 @@ struct ContentView: View {
                 viewModel.loadDocument(url: url)
                 return true
             }
+            #if os(macOS)
             .focusedSceneValue(\.documentActions, documentActions)
+            #endif
             .onChange(of: viewModel.pageLayout) { _, _ in
                 viewModel.handlePageLayoutChanged()
             }
@@ -47,6 +55,18 @@ struct ContentView: View {
                 viewModel.loadDocument(url: url)
                 openURLHandler.pendingURL = nil
             }
+            #if !os(macOS)
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showSettings = false }
+                            }
+                        }
+                }
+            }
+            #endif
     }
 
     // MARK: - Content Area
@@ -55,7 +75,7 @@ struct ContentView: View {
     private var contentArea: some View {
         GeometryReader { geo in
             ZStack {
-                Color(nsColor: .controlBackgroundColor)
+                Color.platformBackground
 
                 if !viewModel.hasDocument {
                     if let errorMessage = viewModel.errorMessage {
@@ -139,8 +159,37 @@ struct ContentView: View {
             }
             .onAppear { viewportSize = geo.size }
             .onChange(of: geo.size) { _, newSize in viewportSize = newSize }
+            #if !os(macOS)
+            .gesture(pinchToZoomGesture)
+            .gesture(swipeGesture)
+            #endif
         }
     }
+
+    // MARK: - Touch Gestures (iOS)
+
+    #if !os(macOS)
+    private var pinchToZoomGesture: some Gesture {
+        MagnifyGesture()
+            .onEnded { value in
+                let delta = value.magnification - 1.0
+                viewModel.adjustZoom(delta)
+            }
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 50)
+            .onEnded { value in
+                guard viewModel.scrollMode == .paged else { return }
+                let horizontal = value.translation.width
+                if horizontal < -50 {
+                    viewModel.navigatePage(1)
+                } else if horizontal > 50 {
+                    viewModel.navigatePage(-1)
+                }
+            }
+    }
+    #endif
 
     // MARK: - Toolbar
 
@@ -164,6 +213,7 @@ struct ContentView: View {
             .help("Next Page")
         }
 
+        #if os(macOS)
         ToolbarItemGroup(placement: .principal) {
             Picker("Layout", selection: Binding(
                 get: { viewModel.pageLayout },
@@ -187,8 +237,32 @@ struct ContentView: View {
             .frame(width: 160)
             .help("Scroll Mode")
         }
+        #endif
 
         ToolbarItemGroup(placement: .automatic) {
+            #if !os(macOS)
+            Menu {
+                Picker("Layout", selection: Binding(
+                    get: { viewModel.pageLayout },
+                    set: { viewModel.pageLayout = $0 }
+                )) {
+                    Label("Single Page", systemImage: "doc").tag(PageLayout.single)
+                    Label("Two Pages", systemImage: "book").tag(PageLayout.twoPage)
+                }
+
+                Picker("Scroll", selection: Binding(
+                    get: { viewModel.scrollMode },
+                    set: { viewModel.scrollMode = $0 }
+                )) {
+                    Label("Paged", systemImage: "square").tag(ScrollMode.paged)
+                    Label("Continuous", systemImage: "square.3.layers.3d.down.left").tag(ScrollMode.continuous)
+                }
+            } label: {
+                Image(systemName: "rectangle.split.2x1")
+            }
+            .disabled(!viewModel.hasDocument)
+            #endif
+
             Menu {
                 ForEach(ColorTheme.allCases, id: \.self) { theme in
                     Button {
@@ -228,6 +302,13 @@ struct ContentView: View {
                 Image(systemName: "arrow.up.and.down.text.horizontal")
             }
             .help("Fit to Height")
+
+            #if !os(macOS)
+            Button { showSettings = true } label: {
+                Image(systemName: "gear")
+            }
+            .help("Settings")
+            #endif
         }
     }
 
@@ -243,11 +324,11 @@ struct ContentView: View {
                    viewModel.currentPage + 1 < document.pageCount {
                     let right = document.pages[viewModel.currentPage + 1]
                     Text("L: \(page.width)\u{00D7}\(page.height)  R: \(right.width)\u{00D7}\(right.height) @ \(page.dpi) DPI")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("\(page.width)\u{00D7}\(page.height) @ \(page.dpi) DPI")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -263,6 +344,7 @@ struct ContentView: View {
         [UTType(filenameExtension: "djvu"), UTType(filenameExtension: "djv")].compactMap { $0 }
     }
 
+    #if os(macOS)
     private var documentActions: DocumentActions {
         DocumentActions(
             navigatePage: { viewModel.navigatePage($0) },
@@ -289,4 +371,5 @@ struct ContentView: View {
             showFileImporter: $viewModel.showFileImporter
         )
     }
+    #endif
 }

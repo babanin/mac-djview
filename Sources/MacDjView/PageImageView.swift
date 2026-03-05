@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import os
 
 private let sepiaColor = Color(red: 1.0, green: 0.94, blue: 0.84)
@@ -28,13 +27,13 @@ private extension View {
 }
 
 struct PageImageView: View {
-    let image: NSImage
+    let image: PlatformImage
     let zoom: Double
     var colorTheme: ColorTheme = .normal
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
-            Image(nsImage: image)
+            Image(platformImage: image)
                 .resizable()
                 .interpolation(.high)
                 .applyColorTheme(colorTheme)
@@ -50,8 +49,8 @@ struct PageImageView: View {
 // MARK: - TwoPageView
 
 struct TwoPageView: View {
-    let leftImage: NSImage
-    let rightImage: NSImage?
+    let leftImage: PlatformImage
+    let rightImage: PlatformImage?
     let zoom: Double
     var colorTheme: ColorTheme = .normal
 
@@ -67,12 +66,12 @@ struct TwoPageView: View {
         }
     }
 
-    private func pageSlot(_ image: NSImage) -> some View {
+    private func pageSlot(_ image: PlatformImage) -> some View {
         ZStack {
             pageBackgroundColor(for: colorTheme)
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
-            Image(nsImage: image)
+            Image(platformImage: image)
                 .resizable()
                 .interpolation(.high)
                 .applyColorTheme(colorTheme)
@@ -95,7 +94,7 @@ private final class RenderToken: Sendable {
 // MARK: - PageCache
 
 final class PageCache {
-    private let cache = NSCache<NSString, NSImage>()
+    private let cache = NSCache<NSString, PlatformImage>()
     private let renderQueue = DispatchQueue(label: "com.mac-djview.render", qos: .userInitiated)
 
     init() {
@@ -104,11 +103,11 @@ final class PageCache {
         cache.totalCostLimit = 256 * 1024 * 1024
     }
 
-    func image(forPage pageIndex: Int, zoom zoomPercent: Int) -> NSImage? {
+    func image(forPage pageIndex: Int, zoom zoomPercent: Int) -> PlatformImage? {
         cache.object(forKey: key(pageIndex, zoomPercent))
     }
 
-    func store(_ image: NSImage, forPage pageIndex: Int, zoom zoomPercent: Int) {
+    func store(_ image: PlatformImage, forPage pageIndex: Int, zoom zoomPercent: Int) {
         let w = Int(image.size.width)
         let h = Int(image.size.height)
         let cost = w * h * 4
@@ -119,7 +118,7 @@ final class PageCache {
         cache.removeAllObjects()
     }
 
-    func render(document: DjVuDocument, pageIndex: Int, scale: Double) async throws -> NSImage {
+    func render(document: DjVuDocument, pageIndex: Int, scale: Double) async throws -> PlatformImage {
         let token = RenderToken()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { cont in
@@ -133,11 +132,8 @@ final class PageCache {
                     autoreleasepool {
                         do {
                             let cgImage = try document.renderPage(at: pageIndex, scale: scale)
-                            let nsImage = NSImage(cgImage: cgImage, size: NSSize(
-                                width: CGFloat(cgImage.width),
-                                height: CGFloat(cgImage.height)
-                            ))
-                            cont.resume(returning: nsImage)
+                            let image = PlatformImage(fromCGImage: cgImage)
+                            cont.resume(returning: image)
                         } catch {
                             cont.resume(throwing: error)
                         }
@@ -277,7 +273,7 @@ struct ContinuousPageSlot: View {
     let pageCache: PageCache
     var colorTheme: ColorTheme = .normal
 
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var error: String?
 
     private var pageWidth: CGFloat {
@@ -294,7 +290,7 @@ struct ContinuousPageSlot: View {
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
             if let image {
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .interpolation(.high)
                     .applyColorTheme(colorTheme)

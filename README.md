@@ -1,6 +1,6 @@
 # MacDjView
 
-A native macOS DjVu document viewer written entirely in Swift — no external C libraries or dependencies. Implements the DjVu file format decoder from scratch, including IFF parsing, ZP-Coder arithmetic decoding, IW44 wavelet image codec, JB2 symbol codec, and layer composition.
+A native macOS/iOS DjVu document viewer written entirely in Swift — no external C libraries or dependencies. Implements the DjVu file format decoder from scratch, including IFF parsing, ZP-Coder arithmetic decoding, IW44 wavelet image codec, JB2 symbol codec, and layer composition.
 
 ![MacDjView screenshot](docs/screenshot.png)
 
@@ -15,6 +15,7 @@ A native macOS DjVu document viewer written entirely in Swift — no external C 
 ## Requirements
 
 - macOS 14 (Sonoma) or later
+- iOS 17 / iPadOS 17 or later
 - Swift 5.10+
 - Xcode 15+ or standalone Swift toolchain
 
@@ -35,6 +36,8 @@ swift run MacDjView
 ```
 
 You can also open the project in Xcode — just open `Package.swift`.
+
+For iOS/iPadOS, open `Package.swift` in Xcode, select an iPad or iPhone simulator target, and build.
 
 ## Unit Tests
 
@@ -108,7 +111,8 @@ Key metrics to watch: **p95 render time** and **peak memory**.
 ```
 Sources/MacDjView/
 ├── MacDjViewApp.swift        # App entry point, menu bar commands (File/View/Go), CLI --test mode
-├── AppDelegate.swift         # NSApplicationDelegate — file-open handling via system events
+├── AppDelegate.swift         # NSApplicationDelegate (macOS), OpenURLHandler, SettingsView
+├── Platform.swift            # Cross-platform bridge: PlatformImage typealias (NSImage/UIImage)
 ├── ContentView.swift         # Main window: toolbar, status bar, view-mode switching, file import
 ├── DocumentViewModel.swift   # Document state (page, zoom, layout, color theme), navigation, rendering
 ├── PageImageView.swift       # Page display views (single/two-page/continuous), PageCache, color themes

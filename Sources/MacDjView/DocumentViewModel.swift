@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 enum PageLayout: String, CaseIterable {
     case single = "Single Page"
@@ -29,8 +28,8 @@ private struct DocumentState: Codable {
 final class DocumentViewModel {
     var document: DjVuDocument?
     var currentPage = 0
-    var pageImage: NSImage?
-    var rightPageImage: NSImage?
+    var pageImage: PlatformImage?
+    var rightPageImage: PlatformImage?
     var zoom: Double = 1.0
     var isLoading = false
     var errorMessage: String?
@@ -269,7 +268,7 @@ final class DocumentViewModel {
         renderTask = Task {
             do {
                 // Render left page
-                let leftImage: NSImage
+                let leftImage: PlatformImage
                 if let cached = pageCache.image(forPage: pageIndex, zoom: zoomPercent) {
                     leftImage = cached
                 } else {
@@ -281,7 +280,7 @@ final class DocumentViewModel {
                 }
 
                 // Render right page if needed
-                let renderedRight: NSImage?
+                let renderedRight: PlatformImage?
                 if let ri = rightIndex {
                     if let cached = pageCache.image(forPage: ri, zoom: zoomPercent) {
                         renderedRight = cached
@@ -336,6 +335,7 @@ final class DocumentViewModel {
     }
 }
 
+#if os(macOS)
 // MARK: - FocusedValues
 
 struct DocumentActions {
@@ -364,3 +364,4 @@ extension FocusedValues {
         set { self[DocumentActionsKey.self] = newValue }
     }
 }
+#endif
